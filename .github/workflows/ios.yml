@@ -65,8 +65,8 @@ jobs:
         if: env.SIGN_IOS == 'true'
         env:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: DZ8AMY8AC6
+          APP_STORE_CONNECT_ISSUER_ID: 9d0b15d8-6286-472a-86ff-9cf8851b4195
           CERTIFICATE_PRIVATE_KEY: ${{ secrets.IOS_DISTRIBUTION_PRIVATE_KEY }}
           APP_STORE_CONNECT_DISABLE_JWT_CACHE: 'true'
         run: |
@@ -104,8 +104,8 @@ jobs:
         if: env.SIGN_IOS == 'true'
         env:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
-          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: DZ8AMY8AC6
+          APP_STORE_CONNECT_ISSUER_ID: 9d0b15d8-6286-472a-86ff-9cf8851b4195
           APP_STORE_CONNECT_DISABLE_JWT_CACHE: 'true'
         run: app-store-connect publish --path 'build/ios/ipa/*.ipa'
 

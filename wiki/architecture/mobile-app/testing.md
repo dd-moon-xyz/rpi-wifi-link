@@ -29,11 +29,9 @@ On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`
 Required repository Actions secrets:
 
 - `APP_STORE_CONNECT_API_KEY`: complete contents of the downloaded `.p8` API key.
-- `APP_STORE_CONNECT_KEY_ID`: API key ID.
-- `APP_STORE_CONNECT_ISSUER_ID`: API issuer ID.
 - `IOS_DISTRIBUTION_PRIVATE_KEY`: complete PEM contents of `.secrets/ios-distribution-key.pem`.
 
-The API key authenticates Apple requests; the separate RSA key signs the distribution certificate. The workflow creates or reuses a matching distribution certificate and App Store profile. Keep the same RSA key for subsequent builds to avoid creating a new certificate every run. Keep `.secrets/` private and backed up; never commit its files. Signing uses Codemagic’s open-source CLI tools on GitHub’s Mac runner, without a Codemagic account.
+The non-secret Key ID and Issuer ID are configured directly in the workflow. Existing GitHub secrets for those IDs are unused. The API key authenticates Apple requests; the separate RSA key signs the distribution certificate. The workflow creates or reuses a matching distribution certificate and App Store profile. Keep the same RSA key for subsequent builds to avoid creating a new certificate every run. Keep `.secrets/` private and backed up; never commit its files. Signing uses Codemagic’s open-source CLI tools on GitHub’s Mac runner, without a Codemagic account.
 
 Pull requests and non-`main` builds remain unsigned, produce `rpi-wifi-link-ios-unsigned`, and do not receive signing secrets. A signed App Store IPA is installed through TestFlight, not directly like an Android APK. Re-running an already uploaded build can require a new workflow run number. [Signing tool reference](https://github.com/codemagic-ci-cd/cli-tools/blob/v0.70.2/docs/app-store-connect/fetch-signing-files.md).
 
