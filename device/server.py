@@ -9,6 +9,7 @@ from pathlib import Path
 import dbus
 import dbus.service
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from dbus.mainloop import NULL_MAIN_LOOP
 from dbus.mainloop.glib import DBusGMainLoop, threads_init
 from gi.repository import GLib
 
@@ -81,7 +82,8 @@ class Provisioner:
                     return {"error": "scan_required"}
                 return protocol.page(self.networks, request["index"])
 
-            with closing(dbus.SystemBus(private=True)) as bus:
+            with closing(dbus.SystemBus(private=True, mainloop=NULL_MAIN_LOOP)) as bus:
+                bus.set_exit_on_disconnect(False)
                 wifi = Wifi(bus, self.interface)
                 if request["op"] == "scan":
                     self.networks = wifi.scan()[:256 * protocol.PAGE_SIZE]
