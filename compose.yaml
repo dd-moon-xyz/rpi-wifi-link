@@ -17,6 +17,12 @@ services:
       BLE_ADAPTER: ${BLE_ADAPTER:-hci0}
     volumes:
       - type: bind
+        source: /etc/hostname
+        target: /run/host-hostname
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
         read_only: true

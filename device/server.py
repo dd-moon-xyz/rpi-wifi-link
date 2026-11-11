@@ -4,6 +4,7 @@ import signal
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import closing
+from pathlib import Path
 
 import dbus
 import dbus.service
@@ -187,8 +188,10 @@ def main() -> None:
     provisioner = Provisioner(os.environ.get("WIFI_INTERFACE", "wlan0"))
     adapter = bus.get_object(BLUEZ, "/org/bluez/" + os.environ.get("BLE_ADAPTER", "hci0"), introspect=False)
     app = Application(bus, provisioner)
+    hostname = Path("/run/host-hostname").read_text().strip()
     advert = Advertisement(bus, "/org/rpiwifilink_advert", ADVERTISEMENT, {
         "Type": "peripheral",
+        "LocalName": hostname,
         "ServiceUUIDs": dbus.Array([protocol.SERVICE], signature="s"),
     })
 
@@ -203,7 +206,7 @@ def main() -> None:
     def service_registered() -> None:
         adapter.RegisterAdvertisement(
             advert.path, {}, dbus_interface=BLUEZ + ".LEAdvertisingManager1", signature="oa{sv}",
-            reply_handler=lambda: logging.info("BLE provisioning available"), error_handler=registration_failed,
+            reply_handler=lambda: logging.info("BLE provisioning available as %s", hostname), error_handler=registration_failed,
         )
 
     def bluez_owner_changed(name, old_owner, new_owner) -> None:
