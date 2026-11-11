@@ -31,6 +31,14 @@ void main() {
     await tester.tap(find.text('connect'));
     await tester.pumpAndSettle();
     expect(find.text('connected'), findsOneWidget);
+    await tester.tap(find.text('< back to devices'));
+    await tester.pumpAndSettle();
+    expect(find.text('my-pi'), findsOneWidget);
+    expect(find.text('connected'), findsOneWidget);
+    expect(find.text('wifi status unavailable'), findsNothing);
+    await tester.tap(find.text('refresh'));
+    await tester.pumpAndSettle();
+    expect(find.text('connected'), findsOneWidget);
   });
 
   testWidgets('shows Bluetooth connection errors instead of a scan placeholder',

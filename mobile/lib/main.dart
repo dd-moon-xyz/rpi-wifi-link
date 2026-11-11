@@ -126,6 +126,7 @@ class _SetupPageState extends State<SetupPage> {
   var _network = '';
   var _hidePassword = true;
   final _devices = <String, PiDevice>{};
+  final _confirmedConnections = <String>{};
   List<WifiNetwork> _networks = [];
   WifiNetwork? _selectedNetwork;
   PiDevice? _selectedDevice;
@@ -248,6 +249,7 @@ class _SetupPageState extends State<SetupPage> {
     _error = null;
     try {
       await _client.connect(_selectedNetwork!, _password.text);
+      _confirmedConnections.add(_selectedDevice!.id);
     } catch (error) {
       _failed = true;
       _error =
@@ -289,7 +291,11 @@ class _SetupPageState extends State<SetupPage> {
             for (final device in _devices.values)
               _choice(
                   device.name,
-                  _demo ? 'disconnected' : 'wifi status unavailable',
+                  _confirmedConnections.contains(device.id)
+                      ? 'connected'
+                      : _demo
+                          ? 'disconnected'
+                          : 'wifi status unavailable',
                   const Icon(LucideIcons300.terminal, size: 20),
                   () => _selectDevice(device)),
             if (_busy) const Text('scanning...'),
