@@ -1,0 +1,14 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+key.properties
+
+# Editor and operating system files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
