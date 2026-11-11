@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: android-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
@@ -67,3 +67,41 @@ jobs:
           path: mobile/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Publish downloadable APK
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested APK
+        uses: actions/download-artifact@v8
+        with:
+          name: rpi-wifi-link-android-debug
+          path: release
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mv release/app-debug.apk release/rpi-wifi-link.apk
+          tag="android-build-$GITHUB_RUN_NUMBER"
+          cat > release/notes.md <<EOF
+          Android debug build for testing, built from commit $GITHUB_SHA.
+
+          Download rpi-wifi-link.apk below and install it on your Android phone.
+          iPhone testing is available through TestFlight.
+          EOF
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" release/rpi-wifi-link.apk --clobber --repo "$GH_REPO"
+          else
+            gh release create "$tag" release/rpi-wifi-link.apk \
+              --repo "$GH_REPO" --target "$GITHUB_SHA" \
+              --title "android build $GITHUB_RUN_NUMBER" \
+              --notes-file release/notes.md --latest
+          fi
+          echo "Download APK: https://github.com/$GH_REPO/releases/download/$tag/rpi-wifi-link.apk" >> "$GITHUB_STEP_SUMMARY"

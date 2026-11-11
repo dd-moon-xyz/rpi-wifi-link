@@ -22,7 +22,9 @@ Choose a Pi and network, enter the Wi-Fi password, and connect. Browser connecti
 
 Automated mobile tests and Android builds run only in GitHub Actions. Do not run local Android builds, emulator tests, or SDK commands. No local Android SDK or Mac is required. Push changes under `mobile/`, or manually run **Build Android** or **Build iOS** from the repository’s **Actions** tab.
 
-Download `rpi-wifi-link-android-debug` from the completed Android run’s artifacts for an installable test APK. This debug build is not for store submission.
+Successful Android builds on `main` publish a GitHub release named `android-build-<run-number>` containing `rpi-wifi-link.apk`. [Download the latest APK directly](https://github.com/dd-moon-xyz/rpi-wifi-link/releases/latest/download/rpi-wifi-link.apk), or browse [Releases](https://github.com/dd-moon-xyz/rpi-wifi-link/releases). No archive extraction is needed. These are debug builds for testing, not store submission.
+
+Pull requests and other branches only save `rpi-wifi-link-android-debug` as an Actions artifact; they do not publish releases. Release uploads use the workflow’s built-in GitHub token, with write access limited to the release job.
 
 On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`, saves `rpi-wifi-link-ios-signed`, and uploads it to App Store Connect for TestFlight. It does not submit a public App Store release or external beta review. After Apple processes the build, add it to an internal TestFlight group and install using the TestFlight app. Complete any export-compliance questions Apple presents for this app’s encryption.
 
