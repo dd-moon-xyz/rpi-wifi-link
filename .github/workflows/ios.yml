@@ -107,7 +107,7 @@ jobs:
           APP_STORE_CONNECT_KEY_IDENTIFIER: DZ8AMY8AC6
           APP_STORE_CONNECT_ISSUER_ID: 9d0b15d8-6286-472a-86ff-9cf8851b4195
           APP_STORE_CONNECT_DISABLE_JWT_CACHE: 'true'
-        run: app-store-connect publish --path 'build/ios/ipa/*.ipa'
+        run: app-store-connect publish --path 'build/ios/ipa/*.ipa' --beta-group internal
 
       - name: Remove temporary signing material
         if: always() && env.SIGN_IOS == 'true'
