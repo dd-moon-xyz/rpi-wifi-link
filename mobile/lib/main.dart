@@ -172,7 +172,11 @@ class _SetupPageState extends State<SetupPage> {
           _error = 'bluetooth scan: ${provisioningErrorMessage(error)}';
           _busy = false;
         });
-    }, onDone: () => _finishDiscovery(generation));
+    }, onDone: () {
+      if (generation != _discoveryGeneration) return;
+      _scan = null;
+      _finishDiscovery(generation);
+    });
     _scanTimer =
         Timer(const Duration(seconds: 10), () => _finishDiscovery(generation));
   }
@@ -184,7 +188,9 @@ class _SetupPageState extends State<SetupPage> {
         _step != SetupStep.device) return;
     _finishedGeneration = generation;
     _scanTimer?.cancel();
-    _scan?.cancel();
+    final scan = _scan;
+    _scan = null;
+    scan?.cancel();
     setState(() {
       _checkingStatus = true;
       _busy = true;
@@ -215,7 +221,9 @@ class _SetupPageState extends State<SetupPage> {
   Future<void> _selectDevice(PiDevice device) async {
     if (_checkingStatus) return;
     _discoveryGeneration++;
-    _scan?.cancel();
+    final scan = _scan;
+    _scan = null;
+    scan?.cancel();
     _scanTimer?.cancel();
     if (!mounted) return;
     setState(() {

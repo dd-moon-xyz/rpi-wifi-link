@@ -37,8 +37,10 @@ void main() {
     expect(find.text('connected'), findsOneWidget);
     expect(find.text('wifi status unavailable'), findsNothing);
     client.connected = false;
+    final readsBeforeRefresh = client.statusReads;
     await tester.tap(find.text('refresh'));
     await tester.pumpAndSettle();
+    expect(client.statusReads, greaterThan(readsBeforeRefresh));
     expect(find.text('disconnected'), findsOneWidget);
     expect(find.text('connected'), findsNothing);
   });
@@ -122,9 +124,14 @@ class LiveTestClient implements ProvisioningClient {
   final Object? openError;
   final Object? scanError;
   bool connected = true;
+  var statusReads = 0;
 
   @override
-  Future<bool> wifiConnected() async => connected;
+  Future<bool> wifiConnected() async {
+    statusReads++;
+    return connected;
+  }
+
   @override
   Stream<PiDevice> discover() => Stream.value(const PiDevice('real', 'my-pi'));
   @override
