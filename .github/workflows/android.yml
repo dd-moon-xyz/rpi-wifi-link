@@ -5,10 +5,12 @@ on:
   push:
     paths:
       - 'mobile/**'
+      - 'device/**'
       - '.github/workflows/*.yml'
   pull_request:
     paths:
       - 'mobile/**'
+      - 'device/**'
       - '.github/workflows/*.yml'
 
 permissions:
@@ -53,6 +55,10 @@ jobs:
 
       - name: Analyze
         run: flutter analyze
+
+      - name: Test Pi protocol
+        working-directory: device
+        run: python3 -m unittest test_protocol
 
       - name: Test
         run: flutter test

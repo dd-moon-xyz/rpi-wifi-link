@@ -1,17 +1,11 @@
 import json
-import os
 import re
 import time
 from dataclasses import dataclass, field
 
-from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
 SERVICE = "a0df0001-3d38-45b9-908f-a9ae97048720"
-CHALLENGE = SERVICE.replace("0001-", "0002-")
 REQUEST = SERVICE.replace("0001-", "0003-")
 RESPONSE = SERVICE.replace("0001-", "0004-")
-DOMAIN = b"rpi-wifi-link/v1/"
 MAX_REQUEST = 384
 PAGE_SIZE = 2
 
@@ -22,7 +16,6 @@ class ProtocolError(Exception):
 
 @dataclass
 class Session:
-    challenge: bytes = field(default_factory=lambda: os.urandom(16))
     expires: float = field(default_factory=lambda: time.monotonic() + 120)
     buffer: bytearray | None = None
     response: bytes = b"\x00"
@@ -50,14 +43,11 @@ class Session:
         return message
 
 
-def unpack(cipher: AESGCM, challenge: bytes, message: bytes) -> dict:
-    if len(message) < 28:
-        raise ProtocolError("invalid envelope")
+def unpack(message: bytes) -> dict:
     try:
-        plaintext = cipher.decrypt(message[:12], message[12:], DOMAIN + b"request/" + challenge)
-        request = json.loads(plaintext.decode("utf-8"))
-    except (InvalidTag, ValueError, RecursionError) as error:
-        raise ProtocolError("invalid envelope") from error
+        request = json.loads(message.decode("utf-8"))
+    except (ValueError, RecursionError) as error:
+        raise ProtocolError("invalid request") from error
 
     if not isinstance(request, dict):
         raise ProtocolError("invalid request")
@@ -75,10 +65,8 @@ def unpack(cipher: AESGCM, challenge: bytes, message: bytes) -> dict:
     raise ProtocolError("invalid request")
 
 
-def pack(cipher: AESGCM, challenge: bytes, response: dict) -> bytes:
-    nonce = os.urandom(12)
-    plaintext = json.dumps(response, separators=(",", ":")).encode("ascii")
-    return b"\x01" + nonce + cipher.encrypt(nonce, plaintext, DOMAIN + b"response/" + challenge)
+def pack(response: dict) -> bytes:
+    return b"\x01" + json.dumps(response, separators=(",", ":")).encode("ascii")
 
 
 def page(networks: list[dict], index: int) -> dict:

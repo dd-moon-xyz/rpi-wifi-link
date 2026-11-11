@@ -17,7 +17,7 @@ void main() {
   }
 
   testWidgets(
-      'authenticates a discovered device and connects to an open network',
+      'selects a discovered device without a setup key and connects to an open network',
       (tester) async {
     final client = LiveTestClient();
     await tester.pumpWidget(WifiLinkApp(client: client));
@@ -25,12 +25,7 @@ void main() {
     expect(find.text('wifi status unavailable'), findsOneWidget);
     await tester.tap(find.text('my-pi'));
     await tester.pumpAndSettle();
-    expect(find.text('setup key'), findsOneWidget);
-    final key = List.filled(64, 'a').join();
-    await tester.enterText(find.byType(TextField), key);
-    await tester.tap(find.text('continue'));
-    await tester.pumpAndSettle();
-    expect(client.receivedKey, key);
+    expect(find.text('setup key'), findsNothing);
     await tester.tap(find.text('open-wifi'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('connect'));
@@ -87,13 +82,10 @@ void main() {
 }
 
 class LiveTestClient implements ProvisioningClient {
-  String? receivedKey;
   @override
   Stream<PiDevice> discover() => Stream.value(const PiDevice('real', 'my-pi'));
   @override
-  Future<void> open(PiDevice device, String key) async {
-    receivedKey = key;
-  }
+  Future<void> open(PiDevice device) async {}
 
   @override
   Future<List<WifiNetwork>> networks() async =>

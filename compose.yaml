@@ -22,9 +22,3 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - type: bind
-        source: ${SETUP_KEY_FILE:-/etc/rpi-wifi-link/setup-key}
-        target: /run/setup-key
-        read_only: true
-        bind:
-          create_host_path: false

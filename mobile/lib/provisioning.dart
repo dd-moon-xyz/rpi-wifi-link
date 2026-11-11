@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -29,7 +28,7 @@ class ProvisioningError implements Exception {
 
 abstract class ProvisioningClient {
   Stream<PiDevice> discover();
-  Future<void> open(PiDevice device, String key);
+  Future<void> open(PiDevice device);
   Future<List<WifiNetwork>> networks();
   Future<void> connect(WifiNetwork network, String password);
   Future<void> close();
@@ -41,11 +40,8 @@ abstract class GattTransport {
 }
 
 class ProvisioningProtocol {
-  ProvisioningProtocol(this.transport, String key)
-      : key = SecretKey(decodeHex(key));
+  ProvisioningProtocol(this.transport);
   final GattTransport transport;
-  final SecretKey key;
-  final _cipher = AesGcm.with256bits();
 
   static List<int> decodeHex(String value) {
     if (!RegExp(r'^(?:[0-9a-fA-F]{2})+$').hasMatch(value)) {
@@ -58,25 +54,16 @@ class ProvisioningProtocol {
   }
 
   Future<Map<String, dynamic>> request(Map<String, dynamic> request) async {
-    final challenge = await transport.read(2);
-    if (challenge.length != 16)
-      throw const ProvisioningError('invalid device challenge');
-    final box = await _cipher.encrypt(utf8.encode(jsonEncode(request)),
-        secretKey: key,
-        aad: [...ascii.encode('rpi-wifi-link/v1/request/'), ...challenge]);
-    final envelope = [...box.nonce, ...box.cipherText, ...box.mac.bytes];
-    if (envelope.length > 384)
-      throw const ProvisioningError('request too large');
-    for (var offset = 0; offset < envelope.length; offset += 19) {
-      final end = (offset + 19).clamp(0, envelope.length);
-      await transport.write([
-        offset == 0
-            ? 0
-            : end == envelope.length
-                ? 2
-                : 1,
-        ...envelope.sublist(offset, end)
-      ]);
+    final message = utf8.encode(jsonEncode(request));
+    if (message.length > 384 || message.length < 2) {
+      throw const ProvisioningError('invalid request size');
+    }
+    final firstEnd = (message.length - 1).clamp(1, 19);
+    await transport.write([0, ...message.sublist(0, firstEnd)]);
+    for (var offset = firstEnd; offset < message.length; offset += 19) {
+      final end = (offset + 19).clamp(0, message.length);
+      await transport.write(
+          [end == message.length ? 2 : 1, ...message.sublist(offset, end)]);
     }
     final deadline = DateTime.now().add(const Duration(seconds: 100));
     while (DateTime.now().isBefore(deadline)) {
@@ -85,15 +72,11 @@ class ProvisioningProtocol {
         await Future<void>.delayed(const Duration(milliseconds: 400));
         continue;
       }
-      if (value.length < 29 || value[0] != 1)
+      if (value.length < 2 || value[0] != 1) {
         throw const ProvisioningError('invalid device response');
-      final plaintext = await _cipher.decrypt(
-          SecretBox(value.sublist(13, value.length - 16),
-              nonce: value.sublist(1, 13),
-              mac: Mac(value.sublist(value.length - 16))),
-          secretKey: key,
-          aad: [...ascii.encode('rpi-wifi-link/v1/response/'), ...challenge]);
-      final result = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
+      }
+      final result =
+          jsonDecode(utf8.decode(value.sublist(1))) as Map<String, dynamic>;
       if (result['error'] != null)
         throw ProvisioningError(
             result['error'].toString().replaceAll('_', ' '));
@@ -132,10 +115,8 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
   }
 
   @override
-  Future<void> open(PiDevice device, String key) async {
+  Future<void> open(PiDevice device) async {
     await close();
-    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(key))
-      throw const ProvisioningError('enter a 64-character setup key');
     _id = device.id;
     final ready = Completer<void>();
     _connection = _ble
@@ -154,7 +135,7 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
     });
     try {
       await ready.future.timeout(const Duration(seconds: 20));
-      _protocol = ProvisioningProtocol(this, key);
+      _protocol = ProvisioningProtocol(this);
     } catch (_) {
       await close();
       rethrow;

@@ -4,11 +4,9 @@ import signal
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import closing
-from pathlib import Path
 
 import dbus
 import dbus.service
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from dbus.mainloop import NULL_MAIN_LOOP
 from dbus.mainloop.glib import DBusGMainLoop, threads_init
 from gi.repository import GLib
@@ -32,8 +30,7 @@ class GattError(dbus.DBusException):
 
 
 class Provisioner:
-    def __init__(self, key: bytes, interface: str) -> None:
-        self.cipher = AESGCM(key)
+    def __init__(self, interface: str) -> None:
         self.interface = interface
         self.sessions: dict[str, protocol.Session] = {}
         self.executor = ThreadPoolExecutor(max_workers=1)
@@ -56,20 +53,20 @@ class Provisioner:
                 raise GattError("InProgress")
             session = self.sessions[device] = protocol.Session()
         if session is None:
-            raise GattError("NotAuthorized")
+            raise GattError("Failed")
         return session
 
     def write(self, device: str, packet: bytes) -> None:
-        session = self.session(device)
+        session = self.session(device, renew=bool(packet) and packet[0] == 0)
         if self.busy:
             raise GattError("InProgress")
         try:
             message = session.write(packet)
             if message is None:
                 return
-            request = protocol.unpack(self.cipher, session.challenge, message)
+            request = protocol.unpack(message)
         except protocol.ProtocolError:
-            raise GattError("NotAuthorized") from None
+            raise GattError("Failed") from None
 
         self.busy = session.pending = True
         work = self.executor.submit(self.execute, request)
@@ -100,10 +97,10 @@ class Provisioner:
 
     def complete(self, session: protocol.Session, result: Future) -> bool:
         try:
-            session.response = protocol.pack(self.cipher, session.challenge, result.result())
+            session.response = protocol.pack(result.result())
         except Exception:
             logging.error("Unexpected provisioning error")
-            session.response = protocol.pack(self.cipher, session.challenge, {"error": "internal_error"})
+            session.response = protocol.pack({"error": "internal_error"})
         finally:
             session.pending = self.busy = False
             session.expires = time.monotonic() + 120
@@ -139,12 +136,9 @@ class Characteristic(Object):
     def ReadValue(self, options):
         offset = options.get("offset", 0)
         device = self.peer(options)
-        if self.uuid == protocol.CHALLENGE:
-            value = self.provisioner.session(device, renew=offset == 0).challenge
-        else:
-            if self.uuid != protocol.RESPONSE:
-                raise GattError("NotPermitted")
-            value = self.provisioner.session(device).response
+        if self.uuid != protocol.RESPONSE:
+            raise GattError("NotPermitted")
+        value = self.provisioner.session(device).response
         if offset > len(value):
             raise GattError("InvalidOffset")
         return dbus.ByteArray(value[offset:])
@@ -159,7 +153,7 @@ class Characteristic(Object):
     def peer(options) -> str:
         device = options.get("device")
         if not device:
-            raise GattError("NotAuthorized")
+            raise GattError("Failed")
         return str(device)
 
 
@@ -168,7 +162,6 @@ class Application(dbus.service.Object):
         super().__init__(bus, ROOT)
         self.objects = [
             Object(bus, SERVICE_PATH, SERVICE, {"UUID": protocol.SERVICE, "Primary": True}),
-            Characteristic(bus, 0, protocol.CHALLENGE, "read", provisioner),
             Characteristic(bus, 1, protocol.REQUEST, "write", provisioner),
             Characteristic(bus, 2, protocol.RESPONSE, "read", provisioner),
         ]
@@ -186,16 +179,12 @@ class Advertisement(Object):
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    key = bytes.fromhex(Path("/run/setup-key").read_text().strip())
-    if len(key) != 32:
-        raise SystemExit("Expected a 32-byte hexadecimal setup key")
-
     DBusGMainLoop(set_as_default=True)
     threads_init()
     bus = dbus.SystemBus()
     loop = GLib.MainLoop()
     GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, loop.quit)
-    provisioner = Provisioner(key, os.environ.get("WIFI_INTERFACE", "wlan0"))
+    provisioner = Provisioner(os.environ.get("WIFI_INTERFACE", "wlan0"))
     adapter = bus.get_object(BLUEZ, "/org/bluez/" + os.environ.get("BLE_ADAPTER", "hci0"), introspect=False)
     app = Application(bus, provisioner)
     advert = Advertisement(bus, "/org/rpiwifilink_advert", ADVERTISEMENT, {

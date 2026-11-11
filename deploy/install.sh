@@ -27,17 +27,5 @@ config=/etc/rpi-wifi-link
 install -d -m 0700 "$config"
 exec 9>"$config/install.lock"
 flock 9
-if [ ! -s "$config/setup-key" ]; then
-    umask 077
-    key_file=$(mktemp "$config/setup-key.XXXXXX")
-    trap 'rm -f "$key_file"' EXIT
-    od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$key_file"
-    if [ "$(wc -c < "$key_file")" -ne 64 ]; then
-        echo "Failed to generate a setup key." >&2
-        exit 1
-    fi
-    mv "$key_file" "$config/setup-key"
-    trap - EXIT
-fi
 
-SETUP_KEY_FILE="$config/setup-key" docker compose -f "$repo/compose.yaml" up -d --build
+docker compose -f "$repo/compose.yaml" up -d --build

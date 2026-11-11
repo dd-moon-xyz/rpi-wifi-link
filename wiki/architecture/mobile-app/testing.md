@@ -4,7 +4,7 @@ type: Guide
 
 # Test the UI
 
-Android/iOS discover real Pis over Bluetooth. The browser preview uses simulated devices and networks; no Pi is needed for browser UI tests. Wi-Fi passwords are cleared after each attempt. Setup keys remain in memory only and are cleared after connecting or leaving setup.
+Android/iOS discover real Pis over Bluetooth. The browser preview uses simulated devices and networks; no Pi is needed for browser UI tests. Wi-Fi passwords are cleared after each attempt.
 
 For a local browser preview, run from the repository root:
 
@@ -18,7 +18,7 @@ flutter run -d chrome
 
 Platform scaffolding is included in the repository.
 
-Choose a Pi and network, enter the Wi-Fi password, and connect. Browser connections remain simulated. Automated tests exercise UI success/failure and encrypted protocol compatibility.
+Choose a Pi and network, enter the Wi-Fi password, and connect. Browser connections remain simulated. Automated tests exercise UI success/failure and request framing and response handling.
 
 Automated mobile tests and Android builds run only in GitHub Actions. Do not run local Android builds, emulator tests, or SDK commands. No local Android SDK or Mac is required. Push changes under `mobile/`, or manually run **Build Android** or **Build iOS** from the repository’s **Actions** tab.
 
@@ -26,7 +26,7 @@ Successful builds on `main` share a GitHub release named `build-<commit-sha>`, w
 
 Pull requests and other branches only save `rpi-wifi-link-android-debug` as an Actions artifact; they do not publish releases. Release uploads use the workflow’s built-in GitHub token, with write access limited to the release job.
 
-On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`, saves `rpi-wifi-link-ios-signed`, and uploads it to App Store Connect for TestFlight. It does not submit a public App Store release or external beta review. After Apple processes the build, add it to an internal TestFlight group and install using the TestFlight app. Complete any export-compliance questions Apple presents for this app’s encryption.
+On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`, saves `rpi-wifi-link-ios-signed`, and uploads it to App Store Connect for TestFlight. It does not submit a public App Store release or external beta review. After Apple processes the build, add it to an internal TestFlight group and install using the TestFlight app. Complete any export-compliance questions Apple presents based on the build being tested; this version removes the custom Dart encryption library.
 
 Required repository Actions secrets:
 
@@ -37,6 +37,6 @@ The non-secret Key ID and Issuer ID are configured directly in the workflow. Exi
 
 Pull requests and non-`main` builds remain unsigned, produce `rpi-wifi-link-ios-unsigned`, and do not receive signing secrets. A signed App Store IPA is installed through TestFlight, not directly like an Android APK. Re-running an already uploaded build can require a new workflow run number. [Signing tool reference](https://github.com/codemagic-ci-cd/cli-tools/blob/v0.70.2/docs/app-store-connect/fetch-signing-files.md).
 
-For a live test, install the Android APK on a Bluetooth-capable phone, enable Bluetooth, and grant the requested permissions (older Android versions also require location services). Select the Pi and enter its private 64-character setup key from `/etc/rpi-wifi-link/setup-key`. Choose a scanned WPA2-Personal or open network and connect. Unsupported security is not selectable. Open networks do not require a password.
+For a live test, install the Android APK on a Bluetooth-capable phone, enable Bluetooth, and grant the requested permissions (older Android versions also require location services). Select the Pi to scan networks directly, without a setup key. Choose a scanned WPA2-Personal or open network and connect. Unsupported security is not selectable. Open networks do not require a password.
 
 The existing service does not expose Wi-Fi status before provisioning, so the device list shows `wifi status unavailable` rather than a guessed connection state. A successful result confirms NetworkManager activation, not internet access. Real-radio Android/iOS testing is still required; a cloud build alone cannot verify Bluetooth behavior.

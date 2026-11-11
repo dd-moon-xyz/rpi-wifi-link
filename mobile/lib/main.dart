@@ -107,14 +107,7 @@ class WifiLinkApp extends StatelessWidget {
       );
 }
 
-enum SetupStep {
-  device,
-  authenticate,
-  network,
-  credentials,
-  connecting,
-  result
-}
+enum SetupStep { device, network, credentials, connecting, result }
 
 class SetupPage extends StatefulWidget {
   const SetupPage({super.key, this.client});
@@ -132,7 +125,6 @@ class _SetupPageState extends State<SetupPage> {
   var _device = '';
   var _network = '';
   var _hidePassword = true;
-  final _key = TextEditingController();
   final _devices = <String, PiDevice>{};
   List<WifiNetwork> _networks = [];
   WifiNetwork? _selectedNetwork;
@@ -188,11 +180,12 @@ class _SetupPageState extends State<SetupPage> {
     setState(() {
       _selectedDevice = device;
       _device = device.name;
-      _step = SetupStep.authenticate;
+      _step = SetupStep.network;
+      _networks = [];
       _busy = false;
       _error = null;
     });
-    if (_demo) await _loadNetworks();
+    await _loadNetworks();
   }
 
   Future<void> _loadNetworks() async {
@@ -202,12 +195,11 @@ class _SetupPageState extends State<SetupPage> {
       _error = null;
     });
     try {
-      await _client.open(_selectedDevice!, _key.text.trim());
+      await _client.open(_selectedDevice!);
       if (!mounted) {
         await _client.close();
         return;
       }
-      _key.clear();
       final networks = await _client.networks();
       if (mounted)
         setState(() {
@@ -218,8 +210,7 @@ class _SetupPageState extends State<SetupPage> {
       await _client.close();
       if (mounted)
         setState(() {
-          _error =
-              'could not authenticate or scan. check the setup key and device.';
+          _error = 'could not scan networks. check the device and retry.';
         });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -231,7 +222,6 @@ class _SetupPageState extends State<SetupPage> {
     _scanTimer?.cancel();
     _scan?.cancel();
     _client.close();
-    _key.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -244,7 +234,6 @@ class _SetupPageState extends State<SetupPage> {
       _network = '';
       _hidePassword = true;
       _error = null;
-      _key.clear();
     });
     _discover();
   }
@@ -311,32 +300,6 @@ class _SetupPageState extends State<SetupPage> {
                 child: const Text('refresh')),
           ],
         );
-      case SetupStep.authenticate:
-        return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('setup key',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 24),
-              TextField(
-                  controller: _key,
-                  obscureText: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration:
-                      const InputDecoration(labelText: 'device setup key')),
-              if (_error != null)
-                Text(_error!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error)),
-              const SizedBox(height: 16),
-              FilledButton(
-                  onPressed: _busy ? null : _loadNetworks,
-                  child: Text(_busy ? 'connecting...' : 'continue')),
-              TextButton(
-                  onPressed: _busy ? null : _restart,
-                  child: const Text('< back to devices')),
-            ]);
       case SetupStep.network:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -360,9 +323,19 @@ class _SetupPageState extends State<SetupPage> {
                   _step = SetupStep.credentials;
                 });
               }),
-            if (_networks.isEmpty) const Text('no networks found'),
+            if (_busy) const _ConnectionSpinner(),
+            if (_error != null)
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            if (_error != null)
+              TextButton(
+                  onPressed: _busy ? null : _loadNetworks,
+                  child: const Text('retry')),
+            if (!_busy && _error == null && _networks.isEmpty)
+              const Text('no networks found'),
             TextButton(
-                onPressed: _restart, child: const Text('< back to devices')),
+                onPressed: _busy ? null : _restart,
+                child: const Text('< back to devices')),
           ],
         );
       case SetupStep.credentials:
@@ -453,7 +426,8 @@ class _SetupPageState extends State<SetupPage> {
                       setState(() => _step = SetupStep.credentials),
                   child: const Text('retry')),
             TextButton(
-                onPressed: _restart, child: const Text('< back to devices')),
+                onPressed: _busy ? null : _restart,
+                child: const Text('< back to devices')),
           ],
         );
     }

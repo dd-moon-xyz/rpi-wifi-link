@@ -6,7 +6,7 @@ class DemoProvisioningClient implements ProvisioningClient {
   Stream<PiDevice> discover() => Stream.fromIterable(
       const [PiDevice('1', 'raspi-01'), PiDevice('2', 'raspi-02')]);
   @override
-  Future<void> open(PiDevice device, String key) async {
+  Future<void> open(PiDevice device) async {
     _device = device.id;
   }
 
