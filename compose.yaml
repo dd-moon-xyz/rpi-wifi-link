@@ -1,0 +1,30 @@
+services:
+  rpi-wifi-link:
+    container_name: rpi-wifi-link
+    build: ./device
+    image: rpi-wifi-link:trixie
+    platform: linux/arm64
+    restart: unless-stopped
+    stop_grace_period: 70s
+    network_mode: none
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    environment:
+      WIFI_INTERFACE: ${WIFI_INTERFACE:-wlan0}
+      BLE_ADAPTER: ${BLE_ADAPTER:-hci0}
+    volumes:
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SETUP_KEY_FILE:-/etc/rpi-wifi-link/setup-key}
+        target: /run/setup-key
+        read_only: true
+        bind:
+          create_host_path: false
