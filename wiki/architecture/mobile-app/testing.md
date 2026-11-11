@@ -21,12 +21,8 @@ Platform scaffolding is included in the repository.
 
 Choose a Pi and network, enter at least eight characters, and connect. The interface uses realistic wording, but connections remain simulated. Automated tests exercise success and failure; the failure control is not shown in the UI. This prototype does not implement device authentication or real provisioning.
 
-Use `flutter devices` and `flutter run -d <device-id>` to test on a phone. iOS builds require macOS and Xcode.
+Builds run in GitHub Actions without a local Android SDK or Mac. Push changes under `mobile/`, or manually run **Build Android** or **Build iOS** from the repository’s **Actions** tab.
 
-Build an installable Android demo APK from `mobile/`:
+Download `rpi-wifi-link-android-debug` from the completed Android run’s artifacts for an installable test APK. This debug build is not for store submission.
 
-```sh
-flutter build apk --debug
-```
-
-Output: `mobile/build/app/outputs/flutter-apk/app-debug.apk` (relative to the repository root). This debug build is for testing, not store submission.
+The iOS workflow produces `rpi-wifi-link-ios-unsigned`; Apple signing is required before installation on an iPhone.

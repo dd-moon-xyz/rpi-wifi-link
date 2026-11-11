@@ -14,6 +14,8 @@ After installation, run this check to verify Flutter and identify any missing de
 flutter doctor
 ```
 
+For browser development, Android Studio and the Android SDK are not required locally. Android-related `flutter doctor` warnings can be ignored; GitHub Actions supplies those tools for Android builds.
+
 [Flutter on Snapcraft](https://snapcraft.io/flutter)
 
 Next: [Run and test the UI](../../architecture/mobile-app/testing.md).
