@@ -16,13 +16,16 @@ permissions:
 
 concurrency:
   group: ios-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
-    name: Unsigned iOS build
+    name: iOS build
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      SIGN_IOS: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      BUNDLE_ID: xyz.ddmoon.rpiwifilink
     defaults:
       run:
         working-directory: mobile
@@ -48,13 +51,82 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Set up signing tools
+        if: env.SIGN_IOS == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install signing tools
+        if: env.SIGN_IOS == 'true'
+        run: python -m pip install 'codemagic-cli-tools==0.70.2'
+
+      - name: Configure signing
+        if: env.SIGN_IOS == 'true'
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.IOS_DISTRIBUTION_PRIVATE_KEY }}
+          APP_STORE_CONNECT_DISABLE_JWT_CACHE: 'true'
+        run: |
+          for name in APP_STORE_CONNECT_PRIVATE_KEY APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required iOS signing secret for $name. See the wiki testing guide."
+              exit 1
+            fi
+          done
+          keychain initialize --path "$RUNNER_TEMP/ios-signing.keychain-db"
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE --strict-match-identifier --create \
+            --certificate-key @env:CERTIFICATE_PRIVATE_KEY \
+            --certificates-dir "$RUNNER_TEMP/ios-certificates"
+          keychain add-certificates --path "$RUNNER_TEMP/ios-signing.keychain-db" \
+            --certificate "$RUNNER_TEMP/ios-certificates/*.p12"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --archive-method app-store \
+            --export-options-plist "$RUNNER_TEMP/ios-export-options.plist"
+
+      - name: Build signed IPA
+        if: env.SIGN_IOS == 'true'
+        run: flutter build ipa --release --build-number="$GITHUB_RUN_NUMBER" --export-options-plist="$RUNNER_TEMP/ios-export-options.plist"
+
+      - name: Upload signed IPA artifact
+        if: env.SIGN_IOS == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rpi-wifi-link-ios-signed
+          path: mobile/build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload to App Store Connect for TestFlight
+        if: env.SIGN_IOS == 'true'
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_DISABLE_JWT_CACHE: 'true'
+        run: app-store-connect publish --path 'build/ios/ipa/*.ipa'
+
+      - name: Remove temporary signing material
+        if: always() && env.SIGN_IOS == 'true'
+        run: |
+          if [ -f "$RUNNER_TEMP/ios-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/ios-signing.keychain-db"
+          fi
+          rm -rf "$RUNNER_TEMP/ios-certificates"
+
       - name: Build without signing
+        if: env.SIGN_IOS != 'true'
         run: flutter build ios --release --no-codesign
 
       - name: Package unsigned app
+        if: env.SIGN_IOS != 'true'
         run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/rpi-wifi-link-ios-unsigned.zip
 
       - name: Upload unsigned app
+        if: env.SIGN_IOS != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: rpi-wifi-link-ios-unsigned

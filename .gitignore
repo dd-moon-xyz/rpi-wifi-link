@@ -1,4 +1,6 @@
 # Local environment and credentials
+.secrets/
+*.p8
 .env
 .env.*
 !.env.example
