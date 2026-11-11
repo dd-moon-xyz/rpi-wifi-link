@@ -26,7 +26,7 @@ Successful builds on `main` share a GitHub release named `build-<commit-sha>`, w
 
 Pull requests and other branches only save `rpi-wifi-link-android-debug` as an Actions artifact; they do not publish releases. Release uploads use the workflow’s built-in GitHub token, with write access limited to the release job.
 
-On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`, saves `rpi-wifi-link-ios-signed`, and uploads it to App Store Connect for TestFlight. After Apple processes the build, the workflow adds it to the existing `internal` testing group automatically. Install or update using the TestFlight app. It does not submit a public App Store release or external beta review.
+On `main`, the iOS workflow signs `xyz.ddmoon.rpiwifilink` for team `F74L6933DL`, saves `rpi-wifi-link-ios-signed`, and uploads it to App Store Connect for TestFlight. The existing `internal` group has Apple's automatic distribution enabled (`hasAccessToAllBuilds=true`), so processed, compliant builds become available to that group automatically. Do not pass `--beta-group internal` to the upload tool: Apple rejects explicit build assignment to this internal group. Install or update using the TestFlight app. The workflow does not submit a public App Store release or external beta review.
 
 `Info.plist` declares `ITSAppUsesNonExemptEncryption=false`: the current app has no custom encryption library or non-exempt encryption. This declaration avoids the repeated export-compliance questionnaire for new builds. Reassess it if encryption is added. Older builds retain their own compliance state. [Apple's declaration reference](https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption).
 
