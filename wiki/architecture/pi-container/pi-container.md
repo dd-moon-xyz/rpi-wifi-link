@@ -22,3 +22,30 @@ No setup key is generated, mounted, or requested. The [mobile app](../mobile-app
 The service advertises the Pi's hostname (for example, `POR`) as its Bluetooth device name. Compose mounts the host's `/etc/hostname` read-only so the container uses the Pi's name. Restart the service after renaming the Pi. BlueZ may shorten long names to fit the advertising packet.
 
 A successful activation saves a NetworkManager profile. Failed activations roll back to the previous Wi-Fi configuration. Use a local console or Ethernet for the first live test because a successful provision changes the Wi-Fi connection.
+
+## Bluetooth registration failure
+
+If logs repeat `BlueZ registration failed (org.bluez.Error.Failed)`, check the host:
+
+```sh
+bluetoothctl show
+```
+
+`Powered: no` with `PowerState: off-blocked` can indicate a software-blocked radio. Find the Bluetooth rfkill entry (`name` is `hci0`) and check its block flags:
+
+```sh
+for item in /sys/class/rfkill/*; do
+  echo "$item"
+  cat "$item/name" "$item/soft" "$item/hard"
+done
+```
+
+For `hci0`, `soft` equal to `1` and `hard` equal to `0` confirms a software block. On CLAX and BRIX this was `rfkill0`; substitute the matching entry on other hosts:
+
+```sh
+echo 0 | sudo tee /sys/class/rfkill/rfkill0/soft
+sudo bluetoothctl power on
+sudo docker restart rpi-wifi-link
+```
+
+Verify `bluetoothctl show` reports `Powered: yes` and an active advertising instance, and `sudo docker logs --tail 20 rpi-wifi-link` reports `BLE provisioning available as <hostname>`. If the radio is already powered on, investigate the Bluetooth service logs instead: `sudo journalctl -u bluetooth -n 50 --no-pager`.
