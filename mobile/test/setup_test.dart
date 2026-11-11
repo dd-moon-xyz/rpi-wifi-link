@@ -22,7 +22,7 @@ void main() {
     final client = LiveTestClient();
     await tester.pumpWidget(WifiLinkApp(client: client));
     await tester.pumpAndSettle();
-    expect(find.text('wifi status unavailable'), findsOneWidget);
+    expect(find.text('connected'), findsOneWidget);
     await tester.tap(find.text('my-pi'));
     await tester.pumpAndSettle();
     expect(find.text('setup key'), findsNothing);
@@ -36,9 +36,11 @@ void main() {
     expect(find.text('my-pi'), findsOneWidget);
     expect(find.text('connected'), findsOneWidget);
     expect(find.text('wifi status unavailable'), findsNothing);
+    client.connected = false;
     await tester.tap(find.text('refresh'));
     await tester.pumpAndSettle();
-    expect(find.text('connected'), findsOneWidget);
+    expect(find.text('disconnected'), findsOneWidget);
+    expect(find.text('connected'), findsNothing);
   });
 
   testWidgets('shows Bluetooth connection errors instead of a scan placeholder',
@@ -47,6 +49,8 @@ void main() {
         client: LiveTestClient(
             openError: const ProvisioningError('device disconnected'))));
     await tester.pumpAndSettle();
+    expect(find.text('wifi status unavailable'), findsOneWidget);
+    expect(find.text('disconnected'), findsNothing);
     await tester.tap(find.text('my-pi'));
     await tester.pumpAndSettle();
     expect(
@@ -117,6 +121,10 @@ class LiveTestClient implements ProvisioningClient {
   LiveTestClient({this.openError, this.scanError});
   final Object? openError;
   final Object? scanError;
+  bool connected = true;
+
+  @override
+  Future<bool> wifiConnected() async => connected;
   @override
   Stream<PiDevice> discover() => Stream.value(const PiDevice('real', 'my-pi'));
   @override

@@ -126,7 +126,10 @@ class _SetupPageState extends State<SetupPage> {
   var _network = '';
   var _hidePassword = true;
   final _devices = <String, PiDevice>{};
-  final _confirmedConnections = <String>{};
+  final _wifiStatus = <String, bool>{};
+  var _discoveryGeneration = 0;
+  var _finishedGeneration = -1;
+  var _checkingStatus = false;
   List<WifiNetwork> _networks = [];
   WifiNetwork? _selectedNetwork;
   PiDevice? _selectedDevice;
@@ -136,7 +139,6 @@ class _SetupPageState extends State<SetupPage> {
   var _busy = false;
   var _failed = false;
   String? _error;
-  bool get _demo => _client is DemoProvisioningClient;
 
   @override
   void initState() {
@@ -147,33 +149,72 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   Future<void> _discover() async {
+    final generation = ++_discoveryGeneration;
     await _scan?.cancel();
     _scanTimer?.cancel();
     await _client.close();
-    if (!mounted) return;
+    if (!mounted || generation != _discoveryGeneration) return;
     setState(() {
       _devices.clear();
+      _wifiStatus.clear();
+      _checkingStatus = false;
       _busy = true;
       _error = null;
     });
     _scan = _client.discover().listen((device) {
-      if (mounted) setState(() => _devices[device.id] = device);
+      if (mounted && generation == _discoveryGeneration)
+        setState(() => _devices[device.id] = device);
     }, onError: (Object error) {
-      if (mounted)
+      _scanTimer?.cancel();
+      _finishedGeneration = generation;
+      if (mounted && generation == _discoveryGeneration)
         setState(() {
           _error = 'bluetooth scan: ${provisioningErrorMessage(error)}';
           _busy = false;
         });
-    }, onDone: () {
-      if (mounted) setState(() => _busy = false);
+    }, onDone: () => _finishDiscovery(generation));
+    _scanTimer =
+        Timer(const Duration(seconds: 10), () => _finishDiscovery(generation));
+  }
+
+  Future<void> _finishDiscovery(int generation) async {
+    if (!mounted ||
+        generation != _discoveryGeneration ||
+        _finishedGeneration == generation ||
+        _step != SetupStep.device) return;
+    _finishedGeneration = generation;
+    _scanTimer?.cancel();
+    _scan?.cancel();
+    setState(() {
+      _checkingStatus = true;
+      _busy = true;
     });
-    _scanTimer = Timer(const Duration(seconds: 10), () {
-      _scan?.cancel();
-      if (mounted) setState(() => _busy = false);
-    });
+    try {
+      for (final device in _devices.values.toList()) {
+        if (!mounted || generation != _discoveryGeneration) return;
+        try {
+          await _client.open(device);
+          final connected = await _client.wifiConnected();
+          if (mounted && generation == _discoveryGeneration)
+            setState(() => _wifiStatus[device.id] = connected);
+        } catch (_) {
+          // An unavailable Bluetooth reading must not become "disconnected".
+        } finally {
+          await _client.close();
+        }
+      }
+    } finally {
+      if (mounted && generation == _discoveryGeneration)
+        setState(() {
+          _checkingStatus = false;
+          _busy = false;
+        });
+    }
   }
 
   Future<void> _selectDevice(PiDevice device) async {
+    if (_checkingStatus) return;
+    _discoveryGeneration++;
     _scan?.cancel();
     _scanTimer?.cancel();
     if (!mounted) return;
@@ -201,6 +242,9 @@ class _SetupPageState extends State<SetupPage> {
         await _client.close();
         return;
       }
+      stage = 'wifi status';
+      final connected = await _client.wifiConnected();
+      if (mounted) setState(() => _wifiStatus[_selectedDevice!.id] = connected);
       stage = 'wifi scan';
       final networks = await _client.networks();
       if (mounted)
@@ -221,6 +265,7 @@ class _SetupPageState extends State<SetupPage> {
 
   @override
   void dispose() {
+    _discoveryGeneration++;
     _scanTimer?.cancel();
     _scan?.cancel();
     _client.close();
@@ -249,7 +294,7 @@ class _SetupPageState extends State<SetupPage> {
     _error = null;
     try {
       await _client.connect(_selectedNetwork!, _password.text);
-      _confirmedConnections.add(_selectedDevice!.id);
+      _wifiStatus[_selectedDevice!.id] = true;
     } catch (error) {
       _failed = true;
       _error =
@@ -263,7 +308,7 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   Widget _choice(
-          String title, String subtitle, Widget leading, VoidCallback tap) =>
+          String title, String subtitle, Widget leading, VoidCallback? tap) =>
       Card.outlined(
         child: ListTile(
           contentPadding:
@@ -291,14 +336,13 @@ class _SetupPageState extends State<SetupPage> {
             for (final device in _devices.values)
               _choice(
                   device.name,
-                  _confirmedConnections.contains(device.id)
-                      ? 'connected'
-                      : _demo
-                          ? 'disconnected'
-                          : 'wifi status unavailable',
+                  _wifiStatus.containsKey(device.id)
+                      ? (_wifiStatus[device.id]! ? 'connected' : 'disconnected')
+                      : (_busy ? 'checking...' : 'wifi status unavailable'),
                   const Icon(LucideIcons300.terminal, size: 20),
-                  () => _selectDevice(device)),
-            if (_busy) const Text('scanning...'),
+                  _checkingStatus ? null : () => _selectDevice(device)),
+            if (_busy)
+              Text(_checkingStatus ? 'checking wifi status...' : 'scanning...'),
             if (!_busy && _devices.isEmpty) const Text('no devices found'),
             if (_error != null)
               Text(_error!,

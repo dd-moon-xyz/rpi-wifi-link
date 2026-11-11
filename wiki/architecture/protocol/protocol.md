@@ -23,9 +23,12 @@ The previous setup-key client is incompatible: update both the app and Pi servic
 | Request | Successful response |
 | --- | --- |
 | `{"op":"scan"}` | First page of access points |
+| `{"op":"status"}` | Current Wi-Fi state: `connected` boolean, `ssid` hexadecimal bytes or null, and `bssid` or null |
 | `{"op":"page","index":1}` | A subsequent page from the last scan |
 | `{"op":"connect","bssid":"00:11:22:33:44:55","password":"..."}` | `{"connected":true}` |
 
 A scan page contains `networks` and `more`. Each access point has `ssid` as raw bytes encoded in hexadecimal, a lowercase `bssid`, `security` (`open`, `wpa2`, or `unsupported`), `signal` from 0 to 100, and `mhz`. Pages are zero-indexed with up to two entries each. The scan results are available for two minutes. Pass an empty password for open networks. WPA2-Personal accepts 8 to 63 printable ASCII characters or a 64-digit hexadecimal PSK. Hidden, enterprise, WEP, and WPA3-only networks are outside the current implementation.
 
 A request can return `{"error":"..."}`. Error values include `scan_required`, `scan_timeout`, `network_unavailable`, `unsupported_security`, `invalid_password`, `activation_failed`, `activation_timeout`, `network_manager_error`, and `internal_error`. A completed connection indicates NetworkManager activation. Internet connectivity is independent.
+
+Status is read from NetworkManager on every request. It reports Wi-Fi activation, not internet connectivity. It does not perform a scan or change the connection.

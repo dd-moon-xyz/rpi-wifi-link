@@ -28,6 +28,19 @@ class Wifi:
     def get(self, path: str, interface: str, key: str):
         return self.proxy(path, PROPERTIES).Get(interface, key, signature="ss", timeout=5)
 
+    def status(self) -> dict:
+        if self.get(self.device, NM + ".Device", "State") != 100:
+            return {"connected": False, "ssid": None, "bssid": None}
+        path = self.get(self.device, WIRELESS, "ActiveAccessPoint")
+        if path == "/":
+            return {"connected": False, "ssid": None, "bssid": None}
+        ap = self.proxy(path, PROPERTIES).GetAll(NM + ".AccessPoint", signature="s", timeout=5)
+        return {
+            "connected": True,
+            "ssid": bytes(ap["Ssid"]).hex(),
+            "bssid": str(ap["HwAddress"]).lower(),
+        }
+
     def access_points(self):
         for path in self.wireless.GetAccessPoints(timeout=5, signature=""):
             ap = self.proxy(path, PROPERTIES).GetAll(NM + ".AccessPoint", signature="s", timeout=5)

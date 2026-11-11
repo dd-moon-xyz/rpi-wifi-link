@@ -43,6 +43,7 @@ String provisioningErrorMessage(Object error, {String password = ''}) {
 abstract class ProvisioningClient {
   Stream<PiDevice> discover();
   Future<void> open(PiDevice device);
+  Future<bool> wifiConnected();
   Future<List<WifiNetwork>> networks();
   Future<void> connect(WifiNetwork network, String password);
   Future<void> close();
@@ -181,6 +182,16 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
   Future<void> write(List<int> frame) => _ble
       .writeCharacteristicWithResponse(_characteristic(3), value: frame)
       .timeout(const Duration(seconds: 10));
+
+  @override
+  Future<bool> wifiConnected() async {
+    if (_protocol == null)
+      throw const ProvisioningError('connect to a device first');
+    final result = await _protocol!.request({'op': 'status'});
+    if (result['connected'] is! bool)
+      throw const ProvisioningError('invalid wifi status');
+    return result['connected'] as bool;
+  }
 
   @override
   Future<List<WifiNetwork>> networks() async {

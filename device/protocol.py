@@ -51,7 +51,7 @@ def unpack(message: bytes) -> dict:
 
     if not isinstance(request, dict):
         raise ProtocolError("invalid request")
-    if request.get("op") == "scan" and request.keys() == {"op"}:
+    if request.get("op") in ("scan", "status") and request.keys() == {"op"}:
         return request
     if request.get("op") == "page" and request.keys() == {"op", "index"}:
         index = request["index"]

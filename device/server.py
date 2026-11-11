@@ -83,6 +83,8 @@ class Provisioner:
             with closing(dbus.SystemBus(private=True, mainloop=NULL_MAIN_LOOP)) as bus:
                 bus.set_exit_on_disconnect(False)
                 wifi = Wifi(bus, self.interface)
+                if request["op"] == "status":
+                    return wifi.status()
                 if request["op"] == "scan":
                     self.networks = wifi.scan()[:256 * protocol.PAGE_SIZE]
                     self.scan_time = time.monotonic()

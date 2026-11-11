@@ -2,6 +2,7 @@ import 'provisioning.dart';
 
 class DemoProvisioningClient implements ProvisioningClient {
   String _device = '';
+  final _connectedDevices = <String>{};
   @override
   Stream<PiDevice> discover() => Stream.fromIterable(
       const [PiDevice('1', 'raspi-01'), PiDevice('2', 'raspi-02')]);
@@ -9,6 +10,9 @@ class DemoProvisioningClient implements ProvisioningClient {
   Future<void> open(PiDevice device) async {
     _device = device.id;
   }
+
+  @override
+  Future<bool> wifiConnected() async => _connectedDevices.contains(_device);
 
   @override
   Future<List<WifiNetwork>> networks() async => [
@@ -19,6 +23,7 @@ class DemoProvisioningClient implements ProvisioningClient {
     await Future<void>.delayed(const Duration(seconds: 2));
     if (_device == '2')
       throw const ProvisioningError('check your password and try again.');
+    _connectedDevices.add(_device);
   }
 
   @override

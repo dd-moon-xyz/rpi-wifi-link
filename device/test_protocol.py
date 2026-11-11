@@ -5,6 +5,9 @@ import protocol
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_accepts_live_status_request(self):
+        self.assertEqual(protocol.unpack(b'{"op":"status"}'), {"op": "status"})
+
     def test_short_scan_uses_initial_and_final_frames(self):
         session = protocol.Session()
         self.assertIsNone(session.write(b'\x00{"op":"scan"'))
