@@ -4,7 +4,7 @@ type: Architecture
 
 # Provisioning protocol
 
-The [Pi service](../pi-container/pi-container.md) advertises BLE service `a0df0001-3d38-45b9-908f-a9ae97048720`. The Flutter app currently simulates setup. A compatible client needs the Pi's private 32-byte setup key decoded from hexadecimal.
+The [Pi service](../pi-container/pi-container.md) advertises BLE service `a0df0001-3d38-45b9-908f-a9ae97048720`. The Android/iOS app implements this protocol; browser previews remain simulated. A compatible client needs the Pi's private 32-byte setup key decoded from hexadecimal.
 
 | UUID prefix | Access | Value |
 | --- | --- | --- |

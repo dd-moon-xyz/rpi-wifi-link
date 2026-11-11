@@ -4,25 +4,28 @@ type: Guide
 
 # Test the UI
 
-The Flutter prototype uses simulated devices and networks. No Bluetooth, Raspberry Pi, or Wi-Fi connection is required. Credentials are held temporarily in memory and cleared after the simulated connection.
+Android/iOS discover real Pis over Bluetooth. The browser preview uses simulated devices and networks; no Pi is needed for browser UI tests. Wi-Fi passwords are cleared after each attempt. Setup keys remain in memory only and are cleared after connecting or leaving setup.
 
-With the Flutter SDK installed, run from the repository root:
+For a local browser preview, run from the repository root:
 
 ```sh
 cd mobile
 flutter pub get
 dart format lib test
 flutter analyze
-flutter test test/setup_test.dart
 flutter run -d chrome
 ```
 
 Platform scaffolding is included in the repository.
 
-Choose a Pi and network, enter at least eight characters, and connect. The interface uses realistic wording, but connections remain simulated. Automated tests exercise success and failure; the failure control is not shown in the UI. This prototype does not implement device authentication or real provisioning.
+Choose a Pi and network, enter the Wi-Fi password, and connect. Browser connections remain simulated. Automated tests exercise UI success/failure and encrypted protocol compatibility.
 
-Builds run in GitHub Actions without a local Android SDK or Mac. Push changes under `mobile/`, or manually run **Build Android** or **Build iOS** from the repository’s **Actions** tab.
+Automated mobile tests and Android builds run only in GitHub Actions. Do not run local Android builds, emulator tests, or SDK commands. No local Android SDK or Mac is required. Push changes under `mobile/`, or manually run **Build Android** or **Build iOS** from the repository’s **Actions** tab.
 
 Download `rpi-wifi-link-android-debug` from the completed Android run’s artifacts for an installable test APK. This debug build is not for store submission.
 
 The iOS workflow produces `rpi-wifi-link-ios-unsigned`; Apple signing is required before installation on an iPhone.
+
+For a live test, install the Android APK on a Bluetooth-capable phone, enable Bluetooth, and grant the requested permissions (older Android versions also require location services). Select the Pi and enter its private 64-character setup key from `/etc/rpi-wifi-link/setup-key`. Choose a scanned WPA2-Personal or open network and connect. Unsupported security is not selectable. Open networks do not require a password.
+
+The existing service does not expose Wi-Fi status before provisioning, so the device list shows `wifi status unavailable` rather than a guessed connection state. A successful result confirms NetworkManager activation, not internet access. Real-radio Android/iOS testing is still required; a cloud build alone cannot verify Bluetooth behavior.

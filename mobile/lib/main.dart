@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'provisioning.dart';
+import 'demo_provisioning.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -20,7 +24,9 @@ void main() {
 }
 
 class WifiLinkApp extends StatelessWidget {
-  const WifiLinkApp({super.key});
+  const WifiLinkApp({super.key, this.client});
+
+  final ProvisioningClient? client;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -97,16 +103,23 @@ class WifiLinkApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const SetupPage(),
+        home: SetupPage(client: client),
       );
 }
 
-enum SetupStep { device, network, credentials, connecting, result }
+enum SetupStep {
+  device,
+  authenticate,
+  network,
+  credentials,
+  connecting,
+  result
+}
 
 class SetupPage extends StatefulWidget {
-  const SetupPage({super.key, this.simulateFailure = false});
+  const SetupPage({super.key, this.client});
 
-  final bool simulateFailure;
+  final ProvisioningClient? client;
 
   @override
   State<SetupPage> createState() => _SetupPageState();
@@ -118,12 +131,107 @@ class _SetupPageState extends State<SetupPage> {
   var _step = SetupStep.device;
   var _device = '';
   var _network = '';
-  var _connectedNetwork = '';
   var _hidePassword = true;
-  bool get _simulateFailure => widget.simulateFailure || _device == 'raspi-02';
+  final _key = TextEditingController();
+  final _devices = <String, PiDevice>{};
+  List<WifiNetwork> _networks = [];
+  WifiNetwork? _selectedNetwork;
+  PiDevice? _selectedDevice;
+  late final ProvisioningClient _client;
+  StreamSubscription<PiDevice>? _scan;
+  Timer? _scanTimer;
+  var _busy = false;
+  var _failed = false;
+  String? _error;
+  bool get _demo => _client is DemoProvisioningClient;
+
+  @override
+  void initState() {
+    super.initState();
+    _client = widget.client ??
+        (kIsWeb ? DemoProvisioningClient() : BleProvisioningClient());
+    _discover();
+  }
+
+  Future<void> _discover() async {
+    await _scan?.cancel();
+    _scanTimer?.cancel();
+    await _client.close();
+    if (!mounted) return;
+    setState(() {
+      _devices.clear();
+      _busy = true;
+      _error = null;
+    });
+    _scan = _client.discover().listen((device) {
+      if (mounted) setState(() => _devices[device.id] = device);
+    }, onError: (Object error) {
+      if (mounted)
+        setState(() {
+          _error =
+              'bluetooth unavailable. enable bluetooth and permissions, then retry.';
+          _busy = false;
+        });
+    }, onDone: () {
+      if (mounted) setState(() => _busy = false);
+    });
+    _scanTimer = Timer(const Duration(seconds: 10), () {
+      _scan?.cancel();
+      if (mounted) setState(() => _busy = false);
+    });
+  }
+
+  Future<void> _selectDevice(PiDevice device) async {
+    _scan?.cancel();
+    _scanTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _selectedDevice = device;
+      _device = device.name;
+      _step = SetupStep.authenticate;
+      _busy = false;
+      _error = null;
+    });
+    if (_demo) await _loadNetworks();
+  }
+
+  Future<void> _loadNetworks() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _client.open(_selectedDevice!, _key.text.trim());
+      if (!mounted) {
+        await _client.close();
+        return;
+      }
+      _key.clear();
+      final networks = await _client.networks();
+      if (mounted)
+        setState(() {
+          _networks = networks;
+          _step = SetupStep.network;
+        });
+    } catch (_) {
+      await _client.close();
+      if (mounted)
+        setState(() {
+          _error =
+              'could not authenticate or scan. check the setup key and device.';
+        });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   void dispose() {
+    _scanTimer?.cancel();
+    _scan?.cancel();
+    _client.close();
+    _key.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -135,20 +243,30 @@ class _SetupPageState extends State<SetupPage> {
       _device = '';
       _network = '';
       _hidePassword = true;
+      _error = null;
+      _key.clear();
     });
+    _discover();
   }
 
   Future<void> _connect() async {
-    if (!_form.currentState!.validate()) return;
+    if (_step != SetupStep.credentials || !_form.currentState!.validate())
+      return;
     FocusScope.of(context).unfocus();
     setState(() => _step = SetupStep.connecting);
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    _password.clear();
-    setState(() {
-      if (!_simulateFailure) _connectedNetwork = _network;
-      _step = SetupStep.result;
-    });
+    _failed = false;
+    _error = null;
+    try {
+      await _client.connect(_selectedNetwork!, _password.text);
+    } catch (_) {
+      _failed = true;
+      _error = 'connection failed. check password and bluetooth connection.';
+    } finally {
+      if (mounted) {
+        _password.clear();
+        setState(() => _step = SetupStep.result);
+      }
+    }
   }
 
   Widget _choice(
@@ -177,24 +295,48 @@ class _SetupPageState extends State<SetupPage> {
             const Text('devices',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
             const SizedBox(height: 24),
-            _choice(
-                'raspi-01',
-                _connectedNetwork.isEmpty ? 'disconnected' : 'connected',
-                const Icon(LucideIcons300.terminal, size: 20), () {
-              setState(() {
-                _device = 'raspi-01';
-                _step = SetupStep.network;
-              });
-            }),
-            _choice('raspi-02', 'disconnected',
-                const Icon(LucideIcons300.terminal, size: 20), () {
-              setState(() {
-                _device = 'raspi-02';
-                _step = SetupStep.network;
-              });
-            }),
+            for (final device in _devices.values)
+              _choice(
+                  device.name,
+                  _demo ? 'disconnected' : 'wifi status unavailable',
+                  const Icon(LucideIcons300.terminal, size: 20),
+                  () => _selectDevice(device)),
+            if (_busy) const Text('scanning...'),
+            if (!_busy && _devices.isEmpty) const Text('no devices found'),
+            if (_error != null)
+              Text(_error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            TextButton(
+                onPressed: _busy ? null : _discover,
+                child: const Text('refresh')),
           ],
         );
+      case SetupStep.authenticate:
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('setup key',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 24),
+              TextField(
+                  controller: _key,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration:
+                      const InputDecoration(labelText: 'device setup key')),
+              if (_error != null)
+                Text(_error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+              const SizedBox(height: 16),
+              FilledButton(
+                  onPressed: _busy ? null : _loadNetworks,
+                  child: Text(_busy ? 'connecting...' : 'continue')),
+              TextButton(
+                  onPressed: _busy ? null : _restart,
+                  child: const Text('< back to devices')),
+            ]);
       case SetupStep.network:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -202,14 +344,23 @@ class _SetupPageState extends State<SetupPage> {
             const Text('networks',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
             const SizedBox(height: 24),
-            for (final name in ['wifi-01', 'wifi-02', 'wifi-03'])
-              _choice(name, '2.4 ghz / secured',
+            for (final network in _networks)
+              _choice(
+                  network.name,
+                  '${network.mhz < 3000 ? '2.4' : '5'} ghz / ${network.security}',
                   const Icon(LucideIcons300.wifi, size: 20), () {
+                if (network.security == 'unsupported') {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('unsupported network security')));
+                  return;
+                }
                 setState(() {
-                  _network = name;
+                  _selectedNetwork = network;
+                  _network = network.name;
                   _step = SetupStep.credentials;
                 });
               }),
+            if (_networks.isEmpty) const Text('no networks found'),
             TextButton(
                 onPressed: _restart, child: const Text('< back to devices')),
           ],
@@ -233,7 +384,9 @@ class _SetupPageState extends State<SetupPage> {
                 onFieldSubmitted: (_) => _connect(),
                 decoration: InputDecoration(
                   labelText: 'wifi password',
-                  helperText: 'minimum 8 characters.',
+                  helperText: _selectedNetwork?.security == 'open'
+                      ? 'no password required.'
+                      : '8–63 characters or 64 hex digits.',
                   suffixIcon: IconButton(
                     tooltip: _hidePassword ? 'show password' : 'hide password',
                     onPressed: () =>
@@ -243,9 +396,15 @@ class _SetupPageState extends State<SetupPage> {
                         : LucideIcons300.eyeOff),
                   ),
                 ),
-                validator: (value) => (value ?? '').length < 8
-                    ? 'enter at least 8 characters.'
-                    : null,
+                validator: (value) {
+                  if (_selectedNetwork?.security == 'open') return null;
+                  final password = value ?? '';
+                  if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(password))
+                    return null;
+                  return RegExp(r'^[ -~]{8,63}$').hasMatch(password)
+                      ? null
+                      : 'enter 8–63 ASCII characters or a 64-digit hex key.';
+                },
               ),
               const SizedBox(height: 16),
               FilledButton(onPressed: _connect, child: const Text('connect')),
@@ -272,23 +431,23 @@ class _SetupPageState extends State<SetupPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(_simulateFailure ? 'connection failed' : 'connected',
+            Text(_failed ? 'connection failed' : 'connected',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w500,
-                  color: _simulateFailure
+                  color: _failed
                       ? Theme.of(context).colorScheme.error
                       : Theme.of(context).colorScheme.onSurface,
                 )),
             const SizedBox(height: 12),
             Text(
-                _simulateFailure
-                    ? 'check your password and try again.'
+                _failed
+                    ? (_error ?? 'check your password and try again.')
                     : '$_device is connected to $_network.',
                 textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            if (_simulateFailure)
+            if (_failed)
               FilledButton(
                   onPressed: () =>
                       setState(() => _step = SetupStep.credentials),

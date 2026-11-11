@@ -17,6 +17,6 @@ sudo docker compose logs rpi-wifi-link
 
 The installer generates a setup key on first install, then builds and starts the Compose service. The service restarts with Docker. Use `sudo docker compose up -d` from the repository root to start it again. It reuses the setup key on subsequent runs. The container uses `wlan0` and `hci0` by default. To select other interfaces, pass `WIFI_INTERFACE` and `BLE_ADAPTER` in the installer's environment.
 
-The setup key is a 64-character hexadecimal string at `/etc/rpi-wifi-link/setup-key`, readable by root. Transfer it privately to the provisioning client. The [BLE protocol](../protocol/protocol.md) describes the wire format. The [Flutter prototype](../mobile-app/mobile-app.md) still uses simulated devices.
+The setup key is a 64-character hexadecimal string at `/etc/rpi-wifi-link/setup-key`, readable by root. Transfer it privately to the provisioning client. The [BLE protocol](../protocol/protocol.md) describes the wire format. Enter this key in the [mobile app](../mobile-app/mobile-app.md) after selecting the Pi.
 
 A successful activation saves a NetworkManager profile. Failed activations roll back to the previous Wi-Fi configuration. Use a local console or Ethernet for the first live test because a successful provision changes the Wi-Fi connection.
