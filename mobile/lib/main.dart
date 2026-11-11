@@ -160,8 +160,7 @@ class _SetupPageState extends State<SetupPage> {
     }, onError: (Object error) {
       if (mounted)
         setState(() {
-          _error =
-              'bluetooth unavailable. enable bluetooth and permissions, then retry.';
+          _error = 'bluetooth scan: ${provisioningErrorMessage(error)}';
           _busy = false;
         });
     }, onDone: () {
@@ -194,24 +193,26 @@ class _SetupPageState extends State<SetupPage> {
       _busy = true;
       _error = null;
     });
+    var stage = 'bluetooth connection';
     try {
       await _client.open(_selectedDevice!);
       if (!mounted) {
         await _client.close();
         return;
       }
+      stage = 'wifi scan';
       final networks = await _client.networks();
       if (mounted)
         setState(() {
           _networks = networks;
           _step = SetupStep.network;
         });
-    } catch (_) {
-      await _client.close();
+    } catch (error) {
       if (mounted)
         setState(() {
-          _error = 'could not scan networks. check the device and retry.';
+          _error = '$stage: ${provisioningErrorMessage(error)}';
         });
+      await _client.close();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -247,9 +248,10 @@ class _SetupPageState extends State<SetupPage> {
     _error = null;
     try {
       await _client.connect(_selectedNetwork!, _password.text);
-    } catch (_) {
+    } catch (error) {
       _failed = true;
-      _error = 'connection failed. check password and bluetooth connection.';
+      _error =
+          'wifi confirmation: ${provisioningErrorMessage(error, password: _password.text)}';
     } finally {
       if (mounted) {
         _password.clear();

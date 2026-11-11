@@ -33,6 +33,30 @@ void main() {
     expect(find.text('connected'), findsOneWidget);
   });
 
+  testWidgets('shows Bluetooth connection errors instead of a scan placeholder',
+      (tester) async {
+    await tester.pumpWidget(WifiLinkApp(
+        client: LiveTestClient(
+            openError: const ProvisioningError('device disconnected'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('my-pi'));
+    await tester.pumpAndSettle();
+    expect(
+        find.text('bluetooth connection: device disconnected'), findsOneWidget);
+    expect(find.text('retry'), findsOneWidget);
+  });
+
+  testWidgets('shows a Pi scan error separately from connection errors',
+      (tester) async {
+    await tester.pumpWidget(WifiLinkApp(
+        client: LiveTestClient(
+            scanError: const ProvisioningError('scan timeout'))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('my-pi'));
+    await tester.pumpAndSettle();
+    expect(find.text('wifi scan: scan timeout'), findsOneWidget);
+  });
+
   testWidgets('validates the password and completes a simulated connection',
       (tester) async {
     await chooseNetwork(tester);
@@ -82,14 +106,22 @@ void main() {
 }
 
 class LiveTestClient implements ProvisioningClient {
+  LiveTestClient({this.openError, this.scanError});
+  final Object? openError;
+  final Object? scanError;
   @override
   Stream<PiDevice> discover() => Stream.value(const PiDevice('real', 'my-pi'));
   @override
-  Future<void> open(PiDevice device) async {}
+  Future<void> open(PiDevice device) async {
+    if (openError != null) throw openError!;
+  }
 
   @override
-  Future<List<WifiNetwork>> networks() async =>
-      [const WifiNetwork('open-wifi', '00:11:22:33:44:55', 'open', 2412)];
+  Future<List<WifiNetwork>> networks() async {
+    if (scanError != null) throw scanError!;
+    return [const WifiNetwork('open-wifi', '00:11:22:33:44:55', 'open', 2412)];
+  }
+
   @override
   Future<void> connect(WifiNetwork network, String password) async {}
   @override

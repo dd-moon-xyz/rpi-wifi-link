@@ -16,6 +16,14 @@ class TestGatt implements GattTransport {
 }
 
 void main() {
+  test('error details redact the submitted Wi-Fi password', () {
+    expect(
+        provisioningErrorMessage(
+            const ProvisioningError('failed with test-password'),
+            password: 'test-password'),
+        'failed with [redacted]');
+  });
+
   test('frames a short scan request without a setup key or challenge',
       () async {
     final transport = TestGatt();

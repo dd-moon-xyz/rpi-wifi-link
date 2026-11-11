@@ -42,3 +42,5 @@ Pull requests and non-`main` builds remain unsigned, produce `rpi-wifi-link-ios-
 For a live test, install the Android APK on a Bluetooth-capable phone, enable Bluetooth, and grant the requested permissions (older Android versions also require location services). Select the Pi to scan networks directly, without a setup key. Choose a scanned WPA2-Personal or open network and connect. Unsupported security is not selectable. Open networks do not require a password.
 
 The existing service does not expose Wi-Fi status before provisioning, so the device list shows `wifi status unavailable` rather than a guessed connection state. A successful result confirms NetworkManager activation, not internet access. Real-radio Android/iOS testing is still required; a cloud build alone cannot verify Bluetooth behavior.
+
+Connection and scan errors include their stage (`bluetooth connection`, `wifi scan`, or `wifi confirmation`) and the underlying platform/device message. Wi-Fi passwords are redacted from confirmation errors. A confirmation error alone does not prove that Wi-Fi activation failed; check the Pi’s connection state before retrying a network change.

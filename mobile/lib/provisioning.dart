@@ -26,6 +26,20 @@ class ProvisioningError implements Exception {
   String toString() => message;
 }
 
+String provisioningErrorMessage(Object error, {String password = ''}) {
+  var message = switch (error) {
+    ProvisioningError e => e.message,
+    TimeoutException e => e.message ?? 'bluetooth operation timed out',
+    GenericFailure e => '${e.code}: ${e.message}',
+    PlatformException e =>
+      '${e.code}: ${e.message ?? 'bluetooth operation failed'}',
+    FormatException() => 'invalid response from device',
+    _ => error.toString(),
+  };
+  if (password.isNotEmpty) message = message.replaceAll(password, '[redacted]');
+  return message.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
 abstract class ProvisioningClient {
   Stream<PiDevice> discover();
   Future<void> open(PiDevice device);
@@ -93,6 +107,7 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
   String? _id;
   ProvisioningProtocol? _protocol;
   bool _connected = false;
+  Object? _connectionFailure;
 
   @override
   Stream<PiDevice> discover() async* {
@@ -117,6 +132,7 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
   @override
   Future<void> open(PiDevice device) async {
     await close();
+    _connectionFailure = null;
     _id = device.id;
     final ready = Completer<void>();
     _connection = _ble
@@ -124,13 +140,18 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
             id: device.id, connectionTimeout: const Duration(seconds: 15))
         .listen((update) {
       _connected = update.connectionState == DeviceConnectionState.connected;
+      if (update.connectionState == DeviceConnectionState.disconnected) {
+        _connectionFailure =
+            update.failure ?? const ProvisioningError('device disconnected');
+      }
       if (_connected && !ready.isCompleted) ready.complete();
       if (update.connectionState == DeviceConnectionState.disconnected &&
           !ready.isCompleted) {
-        ready.completeError(const ProvisioningError('device disconnected'));
+        ready.completeError(_connectionFailure!);
       }
     }, onError: (Object error) {
       _connected = false;
+      _connectionFailure = error;
       if (!ready.isCompleted) ready.completeError(error);
     });
     try {
@@ -144,7 +165,8 @@ class BleProvisioningClient implements ProvisioningClient, GattTransport {
 
   QualifiedCharacteristic _characteristic(int n) {
     if (!_connected || _id == null)
-      throw const ProvisioningError('device disconnected');
+      throw _connectionFailure ??
+          const ProvisioningError('device disconnected');
     return QualifiedCharacteristic(
         deviceId: _id!,
         serviceId: service,
