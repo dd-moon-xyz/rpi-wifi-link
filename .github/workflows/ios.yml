@@ -5,11 +5,11 @@ on:
   push:
     paths:
       - 'mobile/**'
-      - '.github/workflows/ios.yml'
+      - '.github/workflows/*.yml'
   pull_request:
     paths:
       - 'mobile/**'
-      - '.github/workflows/ios.yml'
+      - '.github/workflows/*.yml'
 
 permissions:
   contents: read
@@ -133,3 +133,45 @@ jobs:
           path: mobile/build/ios/rpi-wifi-link-ios-unsigned.zip
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Publish downloadable IPA
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: release-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed IPA
+        uses: actions/download-artifact@v8
+        with:
+          name: rpi-wifi-link-ios-signed
+          path: release
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mv release/*.ipa release/rpi-wifi-link.ipa
+          tag="build-$GITHUB_SHA"
+          cat > release/notes.md <<EOF
+          Built from commit $GITHUB_SHA.
+
+          Android: download rpi-wifi-link.apk and install it on your phone (debug build for testing).
+          iOS: download rpi-wifi-link.ipa. This App Store-signed package is installed through TestFlight, not directly.
+          Each file appears after its platform build finishes successfully.
+          EOF
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$tag" release/rpi-wifi-link.ipa --clobber --repo "$GH_REPO"
+          else
+            gh release create "$tag" release/rpi-wifi-link.ipa \
+              --repo "$GH_REPO" --target "$GITHUB_SHA" \
+              --title "build ${GITHUB_SHA:0:7}" \
+              --notes-file release/notes.md --latest
+          fi
+          echo "Download IPA: https://github.com/$GH_REPO/releases/download/$tag/rpi-wifi-link.ipa" >> "$GITHUB_STEP_SUMMARY"

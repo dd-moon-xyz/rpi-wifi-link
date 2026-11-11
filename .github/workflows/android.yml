@@ -5,11 +5,11 @@ on:
   push:
     paths:
       - 'mobile/**'
-      - '.github/workflows/android.yml'
+      - '.github/workflows/*.yml'
   pull_request:
     paths:
       - 'mobile/**'
-      - '.github/workflows/android.yml'
+      - '.github/workflows/*.yml'
 
 permissions:
   contents: read
@@ -74,6 +74,9 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: release-${{ github.sha }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -89,19 +92,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mv release/app-debug.apk release/rpi-wifi-link.apk
-          tag="android-build-$GITHUB_RUN_NUMBER"
+          tag="build-$GITHUB_SHA"
           cat > release/notes.md <<EOF
-          Android debug build for testing, built from commit $GITHUB_SHA.
+          Built from commit $GITHUB_SHA.
 
-          Download rpi-wifi-link.apk below and install it on your Android phone.
-          iPhone testing is available through TestFlight.
+          Android: download rpi-wifi-link.apk and install it on your phone (debug build for testing).
+          iOS: download rpi-wifi-link.ipa. This App Store-signed package is installed through TestFlight, not directly.
+          Each file appears after its platform build finishes successfully.
           EOF
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release upload "$tag" release/rpi-wifi-link.apk --clobber --repo "$GH_REPO"
           else
             gh release create "$tag" release/rpi-wifi-link.apk \
               --repo "$GH_REPO" --target "$GITHUB_SHA" \
-              --title "android build $GITHUB_RUN_NUMBER" \
+              --title "build ${GITHUB_SHA:0:7}" \
               --notes-file release/notes.md --latest
           fi
           echo "Download APK: https://github.com/$GH_REPO/releases/download/$tag/rpi-wifi-link.apk" >> "$GITHUB_STEP_SUMMARY"
